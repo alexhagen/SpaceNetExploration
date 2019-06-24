@@ -12,10 +12,10 @@ import shutil
 # as it creates mask annotations from polygon labels, because that process only split the data after smaller chips are created from larger, raw images with some overlap.
 
 
-root_path = '~/building_extraction/raw_data/'
+root_path = '/qfs/projects/sgdatasc/spacenet/'
 
-image_dir_path = os.path.join(root_path, 'AOI_2_Vegas_Train', 'RGB-PanSharpen')
-label_dir_path = os.path.join(root_path, 'AOI_2_Vegas_Train', 'geojson', 'buildings')
+image_dir_path = os.path.join(root_path, 'AOI_2_Vegas', 'RGB-PanSharpen')
+label_dir_path = os.path.join(root_path, 'AOI_2_Vegas', 'geojson', 'buildings')
 
 image_names = os.listdir(image_dir_path)
 label_names = []
