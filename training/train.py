@@ -30,7 +30,7 @@ train.py
 
 Execute from the root directory SpaceNetExploration to save checkpoints and logs there.
 
-It requires train_config.py to be in the path.
+It requires py to be in the path.
 
 Adapted from https://github.com/pytorch/examples/blob/master/imagenet/main.py
 """
@@ -39,27 +39,59 @@ Adapted from https://github.com/pytorch/examples/blob/master/imagenet/main.py
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 logging.info('Using PyTorch version %s.', torch.__version__)
 
+# for explanation also see comments in train.py, top part of file
+
+TRAIN = {
+    # hardware and framework parameters
+    'use_gpu': True,
+    'dtype': torch.float64,
+
+    # paths to data splits
+    'data_path_root': '/qfs/projects/sgdatasc/spacenet/training/', # common part of the path for data_path_train, data_path_val and data_path_test
+    'data_path_train': 'Vegas_8bit_256_train',
+    'data_path_val': 'Vegas_8bit_256_val',
+    'data_path_test': 'Vegas_8bit_256_test',
+
+    # training and model parameters
+    'evaluate_only': False,  # Only evaluate the model on the val set once
+    'model_choice': 'unet_baseline',  # 'unet_baseline' or 'unet'
+    'feature_scale': 1,  # parameter for the Unet
+
+    'num_workers': 4,  # how many subprocesses to use for data loading
+    'train_batch_size': 10,
+    'val_batch_size': 10,
+    'test_batch_size': 10,
+
+    'starting_checkpoint_path': '',  # checkpoint .tar to train from, empty if training from scratch
+    'loss_weights': [0.1, 0.8, 0.1],  # weight given to loss for pixels of background, building interior and building border classes
+    'learning_rate': 0.5e-3,
+    'print_every': 50,  # print every how many steps
+    'total_epochs': 15,  # for the walkthrough, we are training for one epoch
+
+    'experiment_name': 'unet_interior_weights', # using weights that emphasize the building interior pixels
+}
+
 
 # config for the run
-evaluate_only = train_config.TRAIN['evaluate_only']
+evaluate_only = TRAIN['evaluate_only']
 
-use_gpu = train_config.TRAIN['use_gpu']
-dtype = train_config.TRAIN['dtype']
+use_gpu = TRAIN['use_gpu']
+dtype = TRAIN['dtype']
 
 torch.backends.cudnn.benchmark = True  # enables benchmark mode in cudnn, see https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936
 
-data_path_root = train_config.TRAIN['data_path_root']
-data_path_train = os.path.join(data_path_root, train_config.TRAIN['data_path_train'])
-data_path_val = os.path.join(data_path_root, train_config.TRAIN['data_path_val'])
-data_path_test = os.path.join(data_path_root, train_config.TRAIN['data_path_test'])
+data_path_root = TRAIN['data_path_root']
+data_path_train = os.path.join(data_path_root, TRAIN['data_path_train'])
+data_path_val = os.path.join(data_path_root, TRAIN['data_path_val'])
+data_path_test = os.path.join(data_path_root, TRAIN['data_path_test'])
 
-model_choice = train_config.TRAIN['model_choice']
-feature_scale = train_config.TRAIN['feature_scale']
+model_choice = TRAIN['model_choice']
+feature_scale = TRAIN['feature_scale']
 
-num_workers = train_config.TRAIN['num_workers']  # how many subprocesses to use for data loading. 0 means that the data will be loaded in the main process
-train_batch_size = train_config.TRAIN['train_batch_size']
-val_batch_size = train_config.TRAIN['val_batch_size']
-test_batch_size = train_config.TRAIN['test_batch_size']
+num_workers = TRAIN['num_workers']  # how many subprocesses to use for data loading. 0 means that the data will be loaded in the main process
+train_batch_size = TRAIN['train_batch_size']
+val_batch_size = TRAIN['val_batch_size']
+test_batch_size = TRAIN['test_batch_size']
 
 # checkpoint to used to initialize, empty if training from scratch
 # starting_checkpoint_path = './checkpoints/unet_checkpoint_epoch9_2018-05-26-21-52-44.pth.tar'
@@ -67,12 +99,12 @@ starting_checkpoint_path = ''
 
 # weights for computing the loss function; absolute values of the weights do not matter
 # [background, interior of building, border of building]
-loss_weights = torch.from_numpy(np.array(train_config.TRAIN['loss_weights']))
-learning_rate = train_config.TRAIN['learning_rate']
-print_every = train_config.TRAIN['print_every']
-total_epochs = train_config.TRAIN['total_epochs']
+loss_weights = torch.from_numpy(np.array(TRAIN['loss_weights']))
+learning_rate = TRAIN['learning_rate']
+print_every = TRAIN['print_every']
+total_epochs = TRAIN['total_epochs']
 
-experiment_name = train_config.TRAIN['experiment_name']
+experiment_name = TRAIN['experiment_name']
 
 split_tags = ['trainval', 'test']  # compatibility with the SpaceNet image preparation code - do not change
 
@@ -80,10 +112,6 @@ split_tags = ['trainval', 'test']  # compatibility with the SpaceNet image prepa
 # device configuration
 device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
 logging.info('Using device: %s.', device)
-
-if is_distributed:
-    dist.init_process_group(backend=dist_backend, init_method=args.dist_url,
-                            world_size=args.world_size)
 
 # data sets and loaders
 dset_train = SpaceNetDataset(data_path_train, split_tags, transform=T.Compose([ToTensor()]))
