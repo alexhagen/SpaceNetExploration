@@ -47,10 +47,10 @@ TRAIN = {
     'dtype': torch.float64,
 
     # paths to data splits
-    'data_path_root': '/qfs/projects/sgdatasc/spacenet/training/', # common part of the path for data_path_train, data_path_val and data_path_test
-    'data_path_train': 'Vegas_8bit_256_train',
-    'data_path_val': 'Vegas_8bit_256_val',
-    'data_path_test': 'Vegas_8bit_256_test',
+    'data_path_root': '/qfs/projects/sgdatasc/spacenet/', # common part of the path for data_path_train, data_path_val and data_path_test
+    'data_path_train': 'Vegas_processed_train',
+    'data_path_val': 'Vegas_processed_val',
+    'data_path_test': 'Vegas_processed_test',
 
     # training and model parameters
     'evaluate_only': False,  # Only evaluate the model on the val set once

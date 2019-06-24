@@ -30,4 +30,3 @@ CONFIG = {
     'use_gpu': True,
     'dtype': torch.float32
 }
-
