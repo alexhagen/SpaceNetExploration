@@ -14,8 +14,8 @@ import shutil
 
 root_path = '/qfs/projects/sgdatasc/spacenet/'
 
-image_dir_path = os.path.join(root_path, 'AOI_2_Vegas', 'RGB-PanSharpen')
-label_dir_path = os.path.join(root_path, 'AOI_2_Vegas', 'geojson', 'buildings')
+image_dir_path = os.path.join(root_path, 'AOI_2_Vegas_Train', 'RGB-PanSharpen')
+label_dir_path = os.path.join(root_path, 'AOI_2_Vegas_Train', 'geojson', 'buildings')
 
 image_names = os.listdir(image_dir_path)
 label_names = []
