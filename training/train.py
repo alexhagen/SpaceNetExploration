@@ -48,7 +48,7 @@ TRAIN = {
 
     # paths to data splits
     'data_path_root': '/qfs/projects/sgdatasc/spacenet/', # common part of the path for data_path_train, data_path_val and data_path_test
-    'data_path_train': 'Vegas_processed_train',
+    'data_path_train': 'Vegas_processed_train/annotations',
     'data_path_val': 'Vegas_processed_val',
     'data_path_test': 'Vegas_processed_test',
 
