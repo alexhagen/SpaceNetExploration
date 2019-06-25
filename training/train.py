@@ -10,12 +10,12 @@ import torch
 import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
-import torch.distributed as dist
+#import torch.distributed as dist
 import torch.optim as optim
 import torchvision.transforms as T
-import train_config
+#import train_config
 from torch.utils.data import DataLoader
-import torch.utils.data.distributed
+#import torch.utils.data.distributed
 from tqdm import tqdm
 
 from models.unet.unet import Unet
