@@ -178,6 +178,8 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
 
         # forward pass on this batch
         scores = model(x)
+        print(scores.shape)
+        print(y.shape)
         loss = criterion(scores, y)
 
         # backward pass
