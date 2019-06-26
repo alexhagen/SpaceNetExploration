@@ -180,6 +180,7 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
         scores = model(x)
         print(scores.shape)
         print(y.shape)
+        print(y.unique())
         loss = criterion(scores, y)
 
         # backward pass
