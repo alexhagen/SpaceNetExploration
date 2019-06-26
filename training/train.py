@@ -178,10 +178,10 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
 
         # forward pass on this batch
         scores = model(x)
-        print(scores.shape)
-        print(y.shape)
-        print(y.permute(0, 2, 3, 1).shape)
-        print(y.unique())
+        print("x", x.shape)
+        print("scores", scores.shape)
+        print("y", y.shape)
+        print("scores permuted", scores.permute(0, 2, 3, 1).shape)
         loss = criterion(scores, y)
 
         # backward pass
