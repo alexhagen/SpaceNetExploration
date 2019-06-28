@@ -4,7 +4,7 @@ import os
 import shutil
 import sys
 from time import localtime, strftime
-
+from skimage import io
 import numpy as np
 import torch
 import torch.nn as nn
@@ -148,15 +148,22 @@ sample_images_train, sample_images_train_tensors = get_sample_images(which_set='
 sample_images_val, sample_images_val_tensors = get_sample_images(which_set='val')
 
 
-def visualize_result_on_samples(model, sample_images, logger, step, split='train'):
+def visualize_result_on_samples(epoch, model, sample_images, logger, step, split='train'):
     model.eval()
     with torch.no_grad():
         sample_images = sample_images.to(device=device, dtype=dtype)
         scores = model(sample_images).cpu().numpy()
         images_li = []
         for i in range(scores.shape[0]):
+
             input = scores[i, :, :, :].squeeze()
             picture = render(input)
+            if i == 0:
+                truth = sample_images[i, :, :, :].cpu().numpy().squeeze()
+                truth = np.moveaxis(truth, 0, -1)
+                toprint = np.moveaxis(picture, 0, -1)
+                io.imsave('prediction_epoch{}_step{}.png'.format(epoch, step), toprint)
+                io.imsave('truth_epoch{}_step{}.png'.format(epoch, step), truth)
             images_li.append(picture)
 
         logger.image_summary('result_{}'.format(split), images_li, step)
@@ -175,13 +182,13 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
         step += 1
         x = data['image'].to(device=device, dtype=dtype)  # move to device, e.g. GPU
         y = data['target'].to(device=device, dtype=torch.long)  # y is not a int value here; also an image
-
         # forward pass on this batch
         scores = model(x)
-        print("x", x.shape)
-        print("scores", scores.shape)
-        print("y", y.shape)
-        print("scores permuted", scores.permute(0, 2, 3, 1).shape)
+        #for i in range(10):
+        #    print(i, ":", y[i, :, :].unique())
+        #print("x", x.shape)
+        #print("scores", scores.shape)
+        #print("y", y.shape)
         loss = criterion(scores, y)
 
         # backward pass
@@ -210,8 +217,8 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
                 logger_train.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), step + 1)
 
             # 3. log training images (image summary)
-            visualize_result_on_samples(model, sample_images_train_tensors, logger_train, step, split='train')
-            visualize_result_on_samples(model, sample_images_val_tensors, logger_train, step, split='val')
+            visualize_result_on_samples(epoch, model, sample_images_train_tensors, logger_train, step, split='train')
+            visualize_result_on_samples(epoch, model, sample_images_val_tensors, logger_train, step, split='val')
 
     return step
 

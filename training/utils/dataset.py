@@ -48,13 +48,18 @@ class SpaceNetDataset(Dataset):
         return len(self.image_list)
 
     def __getitem__(self, idx):
+        #print self.image_list[idx]
         img_path = os.path.join(self.root_dir, 'annotations', self.image_list[idx])
-        target_path = os.path.join(self.root_dir, 'annotations', img_path.replace('.jpg', 'segcls.png'))
+        target_path = os.path.join(self.root_dir, 'annotations', img_path.replace('_8bit', '').replace('.tif', 'segobj.tif'))
 
-        image = io.imread(img_path)
-        target = io.imread(target_path)
+        image = io.imread(img_path)#.astype(int)
+        target = io.imread(target_path).astype(int)
+        target[target == 1] = 0
         target[target == 100] = 1  # building interior
+        #target[target == 254] = 2  # border
         target[target == 255] = 2  # border
+        #print(image.shape)
+        #print(target.shape)
 
         sample = {'image': image, 'target': target, 'image_name': self.image_list[idx]}
 
