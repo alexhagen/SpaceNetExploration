@@ -65,8 +65,8 @@ TRAIN = {
     'starting_checkpoint_path': '',  # checkpoint .tar to train from, empty if training from scratch
     'loss_weights': [0.1, 0.8, 0.1],  # weight given to loss for pixels of background, building interior and building border classes
     'learning_rate': 0.5e-3,
-    'print_every': 50,  # print every how many steps
-    'total_epochs': 15,  # for the walkthrough, we are training for one epoch
+    'print_every': 200,  # print every how many steps
+    'total_epochs': 100,  # for the walkthrough, we are training for one epoch
 
     'experiment_name': 'unet_interior_weights', # using weights that emphasize the building interior pixels
 }
@@ -162,8 +162,8 @@ def visualize_result_on_samples(epoch, model, sample_images, logger, step, split
                 truth = sample_images[i, :, :, :].cpu().numpy().squeeze()
                 truth = np.moveaxis(truth, 0, -1)
                 toprint = np.moveaxis(picture, 0, -1)
-                io.imsave('prediction_epoch{}_step{}.png'.format(epoch, step), toprint)
-                io.imsave('truth_epoch{}_step{}.png'.format(epoch, step), truth)
+                io.imsave('img/prediction_epoch{}_step{}.png'.format(epoch, step), toprint)
+                io.imsave('img/truth_epoch{}_step{}.png'.format(epoch, step), truth)
             images_li.append(picture)
 
         logger.image_summary('result_{}'.format(split), images_li, step)

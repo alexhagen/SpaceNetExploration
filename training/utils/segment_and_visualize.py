@@ -10,7 +10,7 @@ def segment_and_visualize_image(model, image_path, show_image=True, save_to_dir=
     image = io.imread(image_path)
     image_tensor = image.transpose((2, 0, 1))
     image_tensor = image_tensor.reshape((1, image_tensor.shape[0], image_tensor.shape[1], image_tensor.shape[2]))
-    image_tensor = torch.from_numpy(image_tensor).type(torch.float32)
+    image_tensor = torch.from_numpy(image_tensor).type(torch.uint8)
     print(image_tensor.shape)
 
     model.eval()  # set model to evaluation mode
