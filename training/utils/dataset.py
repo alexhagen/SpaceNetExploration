@@ -116,16 +116,7 @@ class SpaceNetDatasetBinary(Dataset):
 
         image = io.imread(img_path)#.astype(int)
         target = io.imread(target_path).astype(int)
-        if np.any(target > 25):
-            target = 0
-        else:
-            target = 1
-        #target[target == 1] = 0
-        #target[target == 100] = 1  # building interior
-        #target[target == 254] = 2  # border
-        #target[target == 255] = 2  # border
-        #print(image.shape)
-        #print(target.shape)
+        target = float(np.sum((target > 25.0).astype(float)))
 
         sample = {'image': image, 'target': target, 'image_name': self.image_list[idx]}
 

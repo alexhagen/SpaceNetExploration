@@ -10,37 +10,21 @@ import torch
 import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
-#import torch.distributed as dist
 import torch.optim as optim
 import torchvision.transforms as T
-#import train_config
 from torch.utils.data import DataLoader
-#import torch.utils.data.distributed
 from tqdm import tqdm
-
 from models.unet.unet import Unet
 from models.unet.unet_baseline import UnetBaseline
 from utils.data_transforms import ToTensor, ToBinaryTensor
 from utils.dataset import SpaceNetDataset, SpaceNetDatasetBinary
 from utils.logger import Logger
 from utils.train_utils import AverageMeter, log_sample_img_gt, render
-from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Softmax
-
-"""
-train.py
-
-Execute from the root directory SpaceNetExploration to save checkpoints and logs there.
-
-It requires py to be in the path.
-
-Adapted from https://github.com/pytorch/examples/blob/master/imagenet/main.py
-"""
+from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Softmax, BatchNorm2d
 
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 logging.info('Using PyTorch version %s.', torch.__version__)
-
-# for explanation also see comments in train.py, top part of file
 
 TRAIN = {
     # hardware and framework parameters
@@ -117,15 +101,15 @@ logging.info('Using device: %s.', device)
 # data sets and loaders
 dset_train = SpaceNetDatasetBinary(data_path_train, split_tags, transform=T.Compose([ToBinaryTensor()]))
 loader_train = DataLoader(dset_train, batch_size=train_batch_size, shuffle=True,
-                          num_workers=num_workers)  # shuffle True to reshuffle at every epoch
+                          num_workers=num_workers, drop_last=True)  # shuffle True to reshuffle at every epoch
 
 dset_val = SpaceNetDatasetBinary(data_path_val, split_tags, transform=T.Compose([ToBinaryTensor()]))
 loader_val = DataLoader(dset_val, batch_size=val_batch_size, shuffle=True,
-                        num_workers=num_workers)  # also reshuffle val set because loss is recorded for the last batch
+                        num_workers=num_workers, drop_last=True)  # also reshuffle val set because loss is recorded for the last batch
 
 dset_test = SpaceNetDatasetBinary(data_path_test, split_tags, transform=T.Compose([ToBinaryTensor()]))
 loader_test = DataLoader(dset_test, batch_size=test_batch_size, shuffle=True,
-                         num_workers=num_workers)
+                         num_workers=num_workers, drop_last=True)
 
 logging.info('Training set size: {}, validation set size: {}, test set size: {}'.format(
     len(dset_train), len(dset_val), len(dset_test)))
@@ -177,16 +161,29 @@ def weights_init(m):
 
 
 def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
-    for t, data in enumerate(tqdm(loader_train)):
+    mapes = []
+    losses = []
+    prog = tqdm#lambda x: x
+    counter = 0
+    for t, data in enumerate(prog(loader_train, total=100)):
+        if counter >= 100:
+            break
         # put model to training mode; we put it in eval mode in visualize_result_on_samples for every print_every
         model.train()
         step += 1
+        counter += 1
         x = data['image'].to(device=device, dtype=dtype)  # move to device, e.g. GPU
-        y = data['target'].to(device=device, dtype=torch.long)  # y is not a int value here; also an image
+        y = data['target'].to(device=device, dtype=dtype)  # y is not a int value here; also an image
         # forward pass on this batch
         scores = model(x)
-        
+
         loss = criterion(scores, y)
+        losses.append(loss.detach().item())
+        #mape = 100.0 * np.abs(scores.cpu().detach().numpy() - y.cpu().detach().numpy()) / (y.cpu().detach().numpy())
+        num = (scores.detach() - y.detach()).abs()
+        denom = ((y.detach() + scores.detach()) / 2.0)
+        mape = (num/denom).mean().item()
+        mapes.append(mape)
 
         # backward pass
         optimizer.zero_grad()
@@ -196,27 +193,31 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
         # TensorBoard logging and print a line to stdout; note that the accuracy is wrt the current mini-batch only
         if step % print_every == 1:
             # 1. log scalar values (scalar summary)
-            _, preds = scores.max(1)
-            accuracy = (y == preds).float().mean()
+            #_, preds = scores.max(1)
+            #percs.append(y.detach().float().mean().item())
+            #accuracy = ((y - preds).abs() <= 0.5).float().mean()
+            #accuracies.append(accuracy.detach().item())
 
-            info = {'minibatch_loss': loss.item(), 'minibatch_accuracy': accuracy.item()}
-            for tag, value in info.items():
-                logger_train.scalar_summary(tag, value, step + 1)
+            #info = {'minibatch_loss': loss.item(), 'minibatch_accuracy': accuracy.item()}
+            #for tag, value in info.items():
+            #    logger_train.scalar_summary(tag, value, step + 1)
 
-            logging.info(
-                'Epoch {}, step {}, train minibatch_loss is {}, train minibatch_accuracy is {}'.format(
-                    epoch, step, info['minibatch_loss'], info['minibatch_accuracy']))
+            #logging.info(
+            #    'Epoch {}, step {}, loss is {:.2f}, accuracy is {:.2f}'.format(
+            #        epoch, step, np.mean(losses), np.mean(accuracies)))
 
             # 2. log values and gradients of the parameters (histogram summary)
             for tag, value in model.named_parameters():
                 tag = tag.replace('.', '/')
-                logger_train.histo_summary(tag, value.data.cpu().numpy(), step + 1)
-                logger_train.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), step + 1)
+                #logger_train.histo_summary(tag, value.data.cpu().numpy(), step + 1)
+                #logger_train.histo_summary(tag + '/grad', value.grad.data.cpu().numpy(), step + 1)
 
             # 3. log training images (image summary)
             #visualize_result_on_samples(epoch, model, sample_images_train_tensors, logger_train, step, split='train')
             #visualize_result_on_samples(epoch, model, sample_images_val_tensors, logger_train, step, split='val')
-
+    logging.warning(
+        'Epoch {}, loss is {:.2e}, mape is {:.2f}'.format(
+            epoch, np.mean(losses), np.mean(mapes)))
     return step
 
 
@@ -229,16 +230,16 @@ def evaluate(loader, model, criterion):
     with torch.no_grad():
         for t, data in enumerate(loader):
             x = data['image'].to(device=device, dtype=dtype)  # move to device, e.g. GPU
-            y = data['target'].to(device=device, dtype=torch.long)
+            y = data['target'].to(device=device, dtype=dtype)
             scores = model(x)
             loss = criterion(scores, y)
             # DEBUG logging.info('Val loss = %.4f' % loss.item())
 
-            _, preds = scores.max(1)
-            accuracy = (y == preds).float().mean()
+            #_, preds = scores.max(1)
+            #accuracy = (y == preds).float().mean()
 
-            losses.update(loss.item(), x.size(0))
-            accuracies.update(accuracy.item(), 1)  # average already taken for accuracy for each pixel
+            #losses.update(loss.item(), x.size(0))
+            #accuracies.update(accuracy.item(), 1)  # average already taken for accuracy for each pixel
 
     return losses.avg, accuracies.avg
 
@@ -257,7 +258,7 @@ class Reshape(torch.nn.Module):
         return x.view(self.shape)
 
 class encoder(torch.nn.Module):
-    def __init__(self, latent_size=1000, first_conv_size=8, img_size=256,
+    def __init__(self, latent_size=1000, first_conv_size=32, img_size=256,
                  bs=4):
         super(encoder, self).__init__()
         self.latent_size = latent_size
@@ -272,44 +273,116 @@ class encoder(torch.nn.Module):
         dim = self.img_size
         so = self.first_conv_size
         self.conv1 = Conv2d(si, so, **cargs)
+        self.bn1 = BatchNorm2d(so)
+        self.relu1 = ReLU()
+        self.conv11 = Conv2d(so, so, **cargs)
+        self.bn11 = BatchNorm2d(so)
+        self.relu11 = ReLU()
         self.mp1 = MaxPool2d(**mpargs)
         si = so; so *= 2; dim /= 2
         self.conv2 = Conv2d(si, so, **cargs)
+        self.bn2 = BatchNorm2d(so)
+        self.relu2 = ReLU()
+        self.conv21 = Conv2d(so, so, **cargs)
+        self.bn21 = BatchNorm2d(so)
+        self.relu21 = ReLU()
         self.mp2 = MaxPool2d(**mpargs)
         si = so; so *= 2; dim /= 2
         self.conv3 = Conv2d(si, so, **cargs)
+        self.bn3 = BatchNorm2d(so)
+        self.relu3 = ReLU()
+        self.conv31 = Conv2d(so, so, **cargs)
+        self.bn31 = BatchNorm2d(so)
+        self.relu31 = ReLU()
         self.mp3 = MaxPool2d(**mpargs)
         si = so; so *= 2; dim /= 2
         self.conv4 = Conv2d(si, so, **cargs)
+        self.bn4 = BatchNorm2d(so)
+        self.relu4 = ReLU()
+        self.conv41 = Conv2d(so, so, **cargs)
+        self.bn41 = BatchNorm2d(so)
+        self.relu41 = ReLU()
         self.mp4 = MaxPool2d(**mpargs)
         si = so; so *= 2; dim /= 2
         self.conv5 = Conv2d(si, so, **cargs)
+        self.relu5 = ReLU()
+        self.bn5 = BatchNorm2d(so)
+        self.conv51 = Conv2d(so, so, **cargs)
+        self.relu51 = ReLU()
+        self.bn51 = BatchNorm2d(so)
         self.mp5 = MaxPool2d(**mpargs)
         si = so; so *= 2; dim /= 2
         self.conv6 = Conv2d(si, so, **cargs)
-        self.mp6 = MaxPool2d(**mpargs)
-        dim /= 2
+        self.relu6 = ReLU()
+        self.bn6 = BatchNorm2d(so)
+        self.conv61 = Conv2d(so, so, **cargs)
+        self.relu61 = ReLU()
+        self.bn61 = BatchNorm2d(so)
+        #self.mp6 = MaxPool2d(**mpargs)
+        #dim /= 2
         self.reshape = Reshape(bs, -1)
-        self.linear = Linear(int(so * dim * dim), self.latent_size)
-        self.relu = Softmax()
+        self.linear1 = Linear(int(so * dim * dim), self.latent_size)
+        self.relu10 = ReLU()
+        self.linear2 = Linear(self.latent_size, 1)
+        self.relu11 = ReLU()
+        #self.softmax = Softmax()
 
 
     def forward(self, x):
+        # block 1
         x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.bn1(x)
+        x = self.conv11(x)
+        x = self.relu11(x)
+        x = self.bn11(x)
         x = self.mp1(x)
+        # block 2
         x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.bn2(x)
+        x = self.conv21(x)
+        x = self.relu21(x)
+        x = self.bn21(x)
         x = self.mp2(x)
+        # block 3
         x = self.conv3(x)
+        x = self.relu3(x)
+        x = self.bn3(x)
+        x = self.conv31(x)
+        x = self.relu31(x)
+        x = self.bn31(x)
         x = self.mp3(x)
+        # block 4
         x = self.conv4(x)
+        x = self.relu4(x)
+        x = self.bn4(x)
+        x = self.conv41(x)
+        x = self.relu41(x)
+        x = self.bn41(x)
         x = self.mp4(x)
+        # block 5
         x = self.conv5(x)
+        x = self.relu5(x)
+        x = self.bn5(x)
+        x = self.conv51(x)
+        x = self.relu51(x)
+        x = self.bn51(x)
         x = self.mp5(x)
+        # block 6
         x = self.conv6(x)
-        x = self.mp6(x)
+        x = self.relu6(x)
+        x = self.bn6(x)
+        x = self.conv61(x)
+        x = self.relu61(x)
+        x = self.bn61(x)
+        #x = self.mp6(x)
         x = self.reshape(x)
-        x = self.linear(x)
-        x = self.relu(x)
+        x = self.linear1(x)
+        x = self.relu10(x)
+        x = self.linear2(x)
+        x = self.relu11(x)
+        #x = self.softmax(x)
         return x
 
 
@@ -325,13 +398,14 @@ def main():
     #log_sample_img_gt(sample_images_train, sample_images_val, logger_train, logger_val)
     logging.info('Logged ground truth image samples')
 
-    model = encoder(bs=TRAIN['train_batch_size'], latent_size=2)
+    model = encoder(bs=TRAIN['train_batch_size'])
 
     model = model.to(device=device, dtype=dtype)  # move the model parameters to CPU/GPU
+    #model = nn.DataParallel(model, device_ids=[0, 1])
 
-    criterion = nn.CrossEntropyLoss().to(device=device, dtype=dtype)
+    criterion = nn.L1Loss().to(device=device, dtype=dtype) #nn.CrossEntropyLoss().to(device=device, dtype=dtype)
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters())
 
     # resume from a checkpoint if provided
     starting_epoch = 0
