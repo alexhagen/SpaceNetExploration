@@ -21,7 +21,8 @@ from utils.dataset import SpaceNetDataset, SpaceNetDatasetBinary
 from utils.logger import Logger
 from utils.train_utils import AverageMeter, log_sample_img_gt, render
 from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Softmax, BatchNorm2d
-
+import torch.nn as nn
+from models.unet.unet_utils import *
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 logging.info('Using PyTorch version %s.', torch.__version__)
@@ -51,7 +52,7 @@ TRAIN = {
     'loss_weights': [0.1, 0.8, 0.1],  # weight given to loss for pixels of background, building interior and building border classes
     'learning_rate': 0.5e-3,
     'print_every': 200,  # print every how many steps
-    'total_epochs': 100,  # for the walkthrough, we are training for one epoch
+    'total_epochs': 20,  # for the walkthrough, we are training for one epoch
 
     'experiment_name': 'unet_binary_weights', # using weights that emphasize the building interior pixels
 }
@@ -163,11 +164,11 @@ def weights_init(m):
 def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
     mapes = []
     losses = []
-    prog = tqdm#lambda x: x
+    prog = lambda x: x
     counter = 0
-    for t, data in enumerate(prog(loader_train, total=100)):
-        if counter >= 100:
-            break
+    for t, data in enumerate(prog(loader_train)):
+        #if counter >= 100:
+        #    break
         # put model to training mode; we put it in eval mode in visualize_result_on_samples for every print_every
         model.train()
         step += 1
@@ -249,140 +250,65 @@ def save_checkpoint(state, is_best, path='../checkpoints/binary_checkpoints.pth.
     if is_best:
         shutil.copyfile(path, os.path.join(checkpoint_dir, 'binary_model_best.pth.tar'))
 
-class Reshape(torch.nn.Module):
+class Flatten(torch.nn.Module):
     def __init__(self, *args):
-        super(Reshape, self).__init__()
-        self.shape = args
+        super(Flatten, self).__init__()
 
     def forward(self, x):
-        return x.view(self.shape)
+        return torch.flatten(x, start_dim=1)
 
-class encoder(torch.nn.Module):
-    def __init__(self, latent_size=1000, first_conv_size=32, img_size=256,
-                 bs=4):
-        super(encoder, self).__init__()
-        self.latent_size = latent_size
-        self.first_conv_size = first_conv_size
-        self.img_size = img_size
-        self.bs = bs
-        self.ops = []
-        cargs = dict(kernel_size=3, stride=1, padding=1)
-        mpargs = dict(kernel_size=2, stride=2, padding=0)
-        # Downsize convolve until dims < 10
-        si = 3
-        dim = self.img_size
-        so = self.first_conv_size
-        self.conv1 = Conv2d(si, so, **cargs)
-        self.bn1 = BatchNorm2d(so)
-        self.relu1 = ReLU()
-        self.conv11 = Conv2d(so, so, **cargs)
-        self.bn11 = BatchNorm2d(so)
-        self.relu11 = ReLU()
-        self.mp1 = MaxPool2d(**mpargs)
-        si = so; so *= 2; dim /= 2
-        self.conv2 = Conv2d(si, so, **cargs)
-        self.bn2 = BatchNorm2d(so)
-        self.relu2 = ReLU()
-        self.conv21 = Conv2d(so, so, **cargs)
-        self.bn21 = BatchNorm2d(so)
-        self.relu21 = ReLU()
-        self.mp2 = MaxPool2d(**mpargs)
-        si = so; so *= 2; dim /= 2
-        self.conv3 = Conv2d(si, so, **cargs)
-        self.bn3 = BatchNorm2d(so)
-        self.relu3 = ReLU()
-        self.conv31 = Conv2d(so, so, **cargs)
-        self.bn31 = BatchNorm2d(so)
-        self.relu31 = ReLU()
-        self.mp3 = MaxPool2d(**mpargs)
-        si = so; so *= 2; dim /= 2
-        self.conv4 = Conv2d(si, so, **cargs)
-        self.bn4 = BatchNorm2d(so)
-        self.relu4 = ReLU()
-        self.conv41 = Conv2d(so, so, **cargs)
-        self.bn41 = BatchNorm2d(so)
-        self.relu41 = ReLU()
-        self.mp4 = MaxPool2d(**mpargs)
-        si = so; so *= 2; dim /= 2
-        self.conv5 = Conv2d(si, so, **cargs)
-        self.relu5 = ReLU()
-        self.bn5 = BatchNorm2d(so)
-        self.conv51 = Conv2d(so, so, **cargs)
-        self.relu51 = ReLU()
-        self.bn51 = BatchNorm2d(so)
-        self.mp5 = MaxPool2d(**mpargs)
-        si = so; so *= 2; dim /= 2
-        self.conv6 = Conv2d(si, so, **cargs)
-        self.relu6 = ReLU()
-        self.bn6 = BatchNorm2d(so)
-        self.conv61 = Conv2d(so, so, **cargs)
-        self.relu61 = ReLU()
-        self.bn61 = BatchNorm2d(so)
-        #self.mp6 = MaxPool2d(**mpargs)
-        #dim /= 2
-        self.reshape = Reshape(bs, -1)
-        self.linear1 = Linear(int(so * dim * dim), self.latent_size)
+
+class UnetCount(nn.Module):
+
+    def __init__(self, feature_scale=1, n_classes=3, is_deconv=True, in_channels=3, is_batchnorm=False):
+        super(UnetCount, self).__init__()
+        self.is_deconv = is_deconv
+        self.in_channels = in_channels
+        self.is_batchnorm = is_batchnorm
+        self.feature_scale = feature_scale
+        self.latent_size = 1000
+
+        filters = [32, 64, 128, 256, 512]  # baseline Unet starts with size 32
+        filters = [int(x / self.feature_scale) for x in filters]
+
+        # downsampling
+        self.conv1 = unetConv2(self.in_channels, filters[0], self.is_batchnorm)
+        self.maxpool1 = nn.MaxPool2d(kernel_size=2)
+
+        self.conv2 = unetConv2(filters[0], filters[1], self.is_batchnorm)
+        self.maxpool2 = nn.MaxPool2d(kernel_size=2)
+
+        self.conv3 = unetConv2(filters[1], filters[2], self.is_batchnorm)
+        self.maxpool3 = nn.MaxPool2d(kernel_size=2)
+
+        self.conv4 = unetConv2(filters[2], filters[3], self.is_batchnorm)
+        self.maxpool4 = nn.MaxPool2d(kernel_size=2)
+
+        self.center = unetConv2(filters[3], filters[4], self.is_batchnorm)
+
+        # counting
+        self.reshape = Flatten()
+        self.linear1 = Linear(65536, self.latent_size)
         self.relu10 = ReLU()
         self.linear2 = Linear(self.latent_size, 1)
-        self.relu11 = ReLU()
-        #self.softmax = Softmax()
 
+    def forward(self, inputs):
+        conv1 = self.conv1(inputs)
+        maxpool1 = self.maxpool1(conv1)
 
-    def forward(self, x):
-        # block 1
-        x = self.conv1(x)
-        x = self.relu1(x)
-        x = self.bn1(x)
-        x = self.conv11(x)
-        x = self.relu11(x)
-        x = self.bn11(x)
-        x = self.mp1(x)
-        # block 2
-        x = self.conv2(x)
-        x = self.relu2(x)
-        x = self.bn2(x)
-        x = self.conv21(x)
-        x = self.relu21(x)
-        x = self.bn21(x)
-        x = self.mp2(x)
-        # block 3
-        x = self.conv3(x)
-        x = self.relu3(x)
-        x = self.bn3(x)
-        x = self.conv31(x)
-        x = self.relu31(x)
-        x = self.bn31(x)
-        x = self.mp3(x)
-        # block 4
-        x = self.conv4(x)
-        x = self.relu4(x)
-        x = self.bn4(x)
-        x = self.conv41(x)
-        x = self.relu41(x)
-        x = self.bn41(x)
-        x = self.mp4(x)
-        # block 5
-        x = self.conv5(x)
-        x = self.relu5(x)
-        x = self.bn5(x)
-        x = self.conv51(x)
-        x = self.relu51(x)
-        x = self.bn51(x)
-        x = self.mp5(x)
-        # block 6
-        x = self.conv6(x)
-        x = self.relu6(x)
-        x = self.bn6(x)
-        x = self.conv61(x)
-        x = self.relu61(x)
-        x = self.bn61(x)
-        #x = self.mp6(x)
-        x = self.reshape(x)
+        conv2 = self.conv2(maxpool1)
+        maxpool2 = self.maxpool2(conv2)
+
+        conv3 = self.conv3(maxpool2)
+        maxpool3 = self.maxpool3(conv3)
+
+        conv4 = self.conv4(maxpool3)
+        maxpool4 = self.maxpool4(conv4)
+
+        x = self.reshape(maxpool4)
         x = self.linear1(x)
         x = self.relu10(x)
         x = self.linear2(x)
-        x = self.relu11(x)
-        #x = self.softmax(x)
         return x
 
 
@@ -398,12 +324,13 @@ def main():
     #log_sample_img_gt(sample_images_train, sample_images_val, logger_train, logger_val)
     logging.info('Logged ground truth image samples')
 
-    model = encoder(bs=TRAIN['train_batch_size'])
+    #model = encoder(bs=TRAIN['train_batch_size'])
+    model = UnetCount(feature_scale=feature_scale, n_classes=num_classes, is_deconv=True, in_channels=3, is_batchnorm=True)
 
     model = model.to(device=device, dtype=dtype)  # move the model parameters to CPU/GPU
     #model = nn.DataParallel(model, device_ids=[0, 1])
 
-    criterion = nn.L1Loss().to(device=device, dtype=dtype) #nn.CrossEntropyLoss().to(device=device, dtype=dtype)
+    criterion = nn.MSELoss().to(device=device, dtype=dtype) #nn.CrossEntropyLoss().to(device=device, dtype=dtype)
 
     optimizer = optim.Adam(model.parameters())
 

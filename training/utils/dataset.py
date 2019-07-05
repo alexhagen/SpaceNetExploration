@@ -115,7 +115,7 @@ class SpaceNetDatasetBinary(Dataset):
         target_path = os.path.join(self.root_dir, 'annotations', img_path.replace('_8bit', '').replace('.tif', 'segobj.tif'))
 
         image = io.imread(img_path)#.astype(int)
-        target = io.imread(target_path).astype(int)
+        target = io.imread(target_path, as_gray=True).astype(int)
         target = float(np.sum((target > 25.0).astype(float)))
 
         sample = {'image': image, 'target': target, 'image_name': self.image_list[idx]}
