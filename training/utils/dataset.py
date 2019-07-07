@@ -116,7 +116,7 @@ class SpaceNetDatasetBinary(Dataset):
 
         image = io.imread(img_path)#.astype(int)
         target = io.imread(target_path, as_gray=True).astype(int)
-        target = float(np.sum((target > 25.0).astype(float)))
+        target = float(np.sum((target > 25.0).astype(float))) / (256. * 256.)
 
         sample = {'image': image, 'target': target, 'image_name': self.image_list[idx]}
 

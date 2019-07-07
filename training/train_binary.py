@@ -20,7 +20,7 @@ from utils.data_transforms import ToTensor, ToBinaryTensor
 from utils.dataset import SpaceNetDataset, SpaceNetDatasetBinary
 from utils.logger import Logger
 from utils.train_utils import AverageMeter, log_sample_img_gt, render
-from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Softmax, BatchNorm2d
+from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Softmax, BatchNorm2d, Sigmoid
 import torch.nn as nn
 from models.unet.unet_utils import *
 
@@ -193,6 +193,13 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
 
         # TensorBoard logging and print a line to stdout; note that the accuracy is wrt the current mini-batch only
         if step % print_every == 1:
+            yp = scores
+            args = (y.detach().min(), y.detach().mean(), y.detach().max(),
+                    yp.detach().min(), yp.detach().mean(), yp.detach().max(),
+                    mape, loss.detach().item())
+            print(("y: min {:.2f}/mean {:.2f}/max {:.2f} | " +
+                   "yp: min {:.2f}/mean {:.2f}/max {:.2f} | " +
+                   "mape: {:.2f}/loss: {:.2e}").format(*args))
             # 1. log scalar values (scalar summary)
             #_, preds = scores.max(1)
             #percs.append(y.detach().float().mean().item())
@@ -291,6 +298,8 @@ class UnetCount(nn.Module):
         self.linear1 = Linear(65536, self.latent_size)
         self.relu10 = ReLU()
         self.linear2 = Linear(self.latent_size, 1)
+        self.sigmoid = Sigmoid()
+        #self.relu2 = ReLU()
 
     def forward(self, inputs):
         conv1 = self.conv1(inputs)
@@ -309,6 +318,8 @@ class UnetCount(nn.Module):
         x = self.linear1(x)
         x = self.relu10(x)
         x = self.linear2(x)
+        x = self.sigmoid(x)
+        #x = self.relu2(x)
         return x
 
 
