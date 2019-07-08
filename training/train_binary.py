@@ -44,14 +44,14 @@ TRAIN = {
     'feature_scale': 1,  # parameter for the Unet
 
     'num_workers': 4,  # how many subprocesses to use for data loading
-    'train_batch_size': 32,
-    'val_batch_size': 32,
-    'test_batch_size': 32,
+    'train_batch_size': 10,
+    'val_batch_size': 10,
+    'test_batch_size': 10,
 
     'starting_checkpoint_path': '',  # checkpoint .tar to train from, empty if training from scratch
     'loss_weights': [0.1, 0.8, 0.1],  # weight given to loss for pixels of background, building interior and building border classes
     'learning_rate': 0.5e-3,
-    'print_every': 200,  # print every how many steps
+    'print_every': 50,  # print every how many steps
     'total_epochs': 100,  # for the walkthrough, we are training for one epoch
 
     'experiment_name': 'unet_binary_weights', # using weights that emphasize the building interior pixels
@@ -167,8 +167,8 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
     prog = lambda x: x
     counter = 0
     for t, data in enumerate(prog(loader_train)):
-        #if counter >= 100:
-        #    break
+        if counter >= 100:
+            break
         # put model to training mode; we put it in eval mode in visualize_result_on_samples for every print_every
         model.train()
         step += 1
@@ -183,7 +183,7 @@ def train(loader_train, model, criterion, optimizer, epoch, step, logger_train):
         #mape = 100.0 * np.abs(scores.cpu().detach().numpy() - y.cpu().detach().numpy()) / (y.cpu().detach().numpy())
         num = (scores.detach() - y.detach()).abs()
         denom = ((y.detach() + scores.detach()) / 2.0)
-        mape = (num/denom).mean().item()
+        mape = 100.0 * (num/denom).mean().item()
         mapes.append(mape)
 
         # backward pass
@@ -342,9 +342,9 @@ def main():
     model = model.to(device=device, dtype=dtype)  # move the model parameters to CPU/GPU
     #model = nn.DataParallel(model, device_ids=[0, 1])
 
-    criterion = nn.SmoothL1Loss().to(device=device, dtype=dtype) #nn.CrossEntropyLoss().to(device=device, dtype=dtype)
+    criterion = nn.MSELoss().to(device=device, dtype=dtype) #nn.CrossEntropyLoss().to(device=device, dtype=dtype)
 
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(), lr=0.5e-3)
 
     # resume from a checkpoint if provided
     starting_epoch = 0
