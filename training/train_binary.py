@@ -20,7 +20,7 @@ from utils.data_transforms import ToTensor, ToBinaryTensor
 from utils.dataset import SpaceNetDataset, SpaceNetDatasetBinary
 from utils.logger import Logger
 from utils.train_utils import AverageMeter, log_sample_img_gt, render
-from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Softmax, BatchNorm2d, Sigmoid
+from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Softmax, LeakyReLU, BatchNorm2d, Sigmoid
 import torch.nn as nn
 from models.unet.unet_utils import *
 
@@ -44,15 +44,15 @@ TRAIN = {
     'feature_scale': 1,  # parameter for the Unet
 
     'num_workers': 4,  # how many subprocesses to use for data loading
-    'train_batch_size': 10,
-    'val_batch_size': 10,
-    'test_batch_size': 10,
+    'train_batch_size': 32,
+    'val_batch_size': 32,
+    'test_batch_size': 32,
 
     'starting_checkpoint_path': '',  # checkpoint .tar to train from, empty if training from scratch
     'loss_weights': [0.1, 0.8, 0.1],  # weight given to loss for pixels of background, building interior and building border classes
     'learning_rate': 0.5e-3,
     'print_every': 200,  # print every how many steps
-    'total_epochs': 20,  # for the walkthrough, we are training for one epoch
+    'total_epochs': 100,  # for the walkthrough, we are training for one epoch
 
     'experiment_name': 'unet_binary_weights', # using weights that emphasize the building interior pixels
 }
@@ -296,9 +296,9 @@ class UnetCount(nn.Module):
         # counting
         self.reshape = Flatten()
         self.linear1 = Linear(65536, self.latent_size)
-        self.relu10 = ReLU()
+        self.relu10 = LeakyReLU()
         self.linear2 = Linear(self.latent_size, 1)
-        self.sigmoid = Sigmoid()
+        self.sigmoid = LeakyReLU()
         #self.relu2 = ReLU()
 
     def forward(self, inputs):
@@ -336,12 +336,13 @@ def main():
     logging.info('Logged ground truth image samples')
 
     #model = encoder(bs=TRAIN['train_batch_size'])
-    model = UnetCount(feature_scale=feature_scale, n_classes=num_classes, is_deconv=True, in_channels=3, is_batchnorm=True)
+    model = UnetCount(feature_scale=feature_scale, n_classes=num_classes,
+                      is_batchnorm=False)
 
     model = model.to(device=device, dtype=dtype)  # move the model parameters to CPU/GPU
     #model = nn.DataParallel(model, device_ids=[0, 1])
 
-    criterion = nn.MSELoss().to(device=device, dtype=dtype) #nn.CrossEntropyLoss().to(device=device, dtype=dtype)
+    criterion = nn.SmoothL1Loss().to(device=device, dtype=dtype) #nn.CrossEntropyLoss().to(device=device, dtype=dtype)
 
     optimizer = optim.Adam(model.parameters())
 
